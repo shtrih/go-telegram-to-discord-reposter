@@ -86,6 +86,13 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			fileID = &u.ChannelPost.Voice.FileID
 			fileName = "voice.ogg"
 			contentType = "audio/ogg"
+		} else if u.ChannelPost.Sticker != nil {
+			msg, err := dcbot.ChannelMessageSend(conf.Discord.ChannelID, "sticker: " + u.ChannelPost.Sticker.Emoji)
+			if err != nil {
+				log.Printf("Cannot repost sticker! See error: %s", err.Error())
+				return
+			}
+			m = msg
 		}
 
 		if fileID != nil {
