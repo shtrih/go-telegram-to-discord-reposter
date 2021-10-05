@@ -62,6 +62,8 @@ func main() {
 		panic(err)
 	}
 
+	tgbot.Debug = conf.Debug == "true"
+
 	fmt.Printf("Authorized on account @%s\n", tgbot.Self.UserName)
 
 	// Init database

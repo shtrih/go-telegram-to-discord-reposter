@@ -16,6 +16,7 @@ type Config struct {
 
 type Telegram struct {
 	Token string `yaml:"token"`
+	Debug string `yaml:"debug"`
 }
 
 type Discord struct {
