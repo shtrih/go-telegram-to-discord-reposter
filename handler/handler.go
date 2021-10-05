@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
@@ -8,6 +9,31 @@ import (
 	"reposter/config"
 	"reposter/database"
 )
+
+func formatMessage(msg *tgbotapi.Message) string {
+	authorSignature := ""
+	if msg.AuthorSignature != "" {
+		authorSignature = "`" + msg.AuthorSignature + "` "
+	}
+
+	forwardedFrom := ""
+	if msg.ForwardFromChat != nil {
+		chatName := ""
+		if msg.ForwardFromChat.UserName != "" {
+			chatName = fmt.Sprintf(" (@%s)", msg.ForwardFromChat.UserName)
+		}
+		forwardedFrom = fmt.Sprintf("forwarded from `%s%s`", msg.ForwardFromChat.Title, chatName)
+	} else if msg.ForwardFrom != nil {
+		forwardedFrom = fmt.Sprintf("forwarded from `%s %s`", msg.ForwardFrom.FirstName, msg.ForwardFrom.LastName)
+	}
+
+	linebreak := ""
+	if authorSignature != "" || forwardedFrom != "" {
+		linebreak = "\n\n"
+	}
+
+	return authorSignature + forwardedFrom + linebreak + msg.Caption + msg.Text
+}
 
 func HandleUpdate(conf *config.Config, db *database.Database, client *http.Client, tgbot *tgbotapi.BotAPI, dcbot *discordgo.Session, u tgbotapi.Update) {
 	if u.ChannelPost != nil {
@@ -20,7 +46,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		// Send repost to Discord text channel
 		if u.ChannelPost.Text != "" {
 			var err error
-			m, err = dcbot.ChannelMessageSend(conf.Discord.ChannelID, u.ChannelPost.Text)
+			m, err = dcbot.ChannelMessageSend(conf.Discord.ChannelID, formatMessage(u.ChannelPost))
 			if err != nil {
 				log.Printf("Cannot repost your post! See error: %s", err.Error())
 				return
@@ -41,27 +67,19 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				}
 				defer resp.Body.Close()
 
-				if u.ChannelPost.Caption != "" {
-					m, err = dcbot.ChannelMessageSendComplex(
-						conf.Discord.ChannelID,
-						&discordgo.MessageSend{
-							Content: u.ChannelPost.Caption,
-							Files: []*discordgo.File{
-								{
-									Name:        "photo.jpg",
-									ContentType: "image/jpeg",
-									Reader:      resp.Body,
-								},
+				m, err = dcbot.ChannelMessageSendComplex(
+					conf.Discord.ChannelID,
+					&discordgo.MessageSend{
+						Content: formatMessage(u.ChannelPost),
+						Files: []*discordgo.File{
+							{
+								Name:        "photo.jpg",
+								ContentType: "image/jpeg",
+								Reader:      resp.Body,
 							},
 						},
-					)
-				} else {
-					m, err = dcbot.ChannelFileSend(
-						conf.Discord.ChannelID,
-						"photo.jpg",
-						resp.Body,
-					)
-				}
+					},
+				)
 				if err != nil {
 					log.Printf("Cannot send file! See error: %s", err.Error())
 				}
@@ -87,7 +105,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			fileName = "voice.ogg"
 			contentType = "audio/ogg"
 		} else if u.ChannelPost.Sticker != nil {
-			msg, err := dcbot.ChannelMessageSend(conf.Discord.ChannelID, "sticker: " + u.ChannelPost.Sticker.Emoji)
+			msg, err := dcbot.ChannelMessageSend(conf.Discord.ChannelID, formatMessage(u.ChannelPost) + "sticker: " + u.ChannelPost.Sticker.Emoji)
 			if err != nil {
 				log.Printf("Cannot repost sticker! See error: %s", err.Error())
 				return
@@ -109,27 +127,19 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			}
 			defer resp.Body.Close()
 
-			if u.ChannelPost.Caption != "" {
-				m, err = dcbot.ChannelMessageSendComplex(
-					conf.Discord.ChannelID,
-					&discordgo.MessageSend{
-						Content: u.ChannelPost.Caption,
-						Files: []*discordgo.File{
-							{
-								Name:        fileName,
-								ContentType: contentType,
-								Reader:      resp.Body,
-							},
+			m, err = dcbot.ChannelMessageSendComplex(
+				conf.Discord.ChannelID,
+				&discordgo.MessageSend{
+					Content: formatMessage(u.ChannelPost),
+					Files: []*discordgo.File{
+						{
+							Name:        fileName,
+							ContentType: contentType,
+							Reader:      resp.Body,
 						},
 					},
-				)
-			} else {
-				m, err = dcbot.ChannelFileSend(
-					conf.Discord.ChannelID,
-					fileName,
-					resp.Body,
-				)
-			}
+				},
+			)
 			if err != nil {
 				log.Printf("Cannot send file! See error: %s", err.Error())
 			}
@@ -163,13 +173,8 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		}
 
 		// Edit it with id that we got
-		if u.EditedChannelPost.Text != "" {
-			_, err = dcbot.ChannelMessageEdit(conf.Discord.ChannelID, pm.Data.Discord, u.EditedChannelPost.Text)
-			if err != nil {
-				log.Printf("Cannot edit repost! See error: %s", err.Error())
-			}
-		} else if u.EditedChannelPost.Caption != "" {
-			_, err = dcbot.ChannelMessageEdit(conf.Discord.ChannelID, pm.Data.Discord, u.EditedChannelPost.Caption)
+		if u.EditedChannelPost.Text != "" || u.EditedChannelPost.Caption != "" {
+			_, err = dcbot.ChannelMessageEdit(conf.Discord.ChannelID, pm.Data.Discord, formatMessage(u.EditedChannelPost))
 			if err != nil {
 				log.Printf("Cannot edit repost! See error: %s", err.Error())
 			}
