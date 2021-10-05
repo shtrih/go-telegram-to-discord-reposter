@@ -1,0 +1,11 @@
+version: '3.9'
+
+services:
+  tg2ds-reposter:
+    build:
+      context: .
+    container_name: tg2ds-reposter
+    restart: "always"
+    volumes:
+      - "${REPOSTER_STORE_FILE:-./store.db}:/store.db"
+      - "${REPOSTER_CONFIG_FILE:-./config.yaml}:/cnf.yaml"
