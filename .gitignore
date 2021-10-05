@@ -15,5 +15,6 @@
 vendor
 Gopkg.lock
 
-# Go modules
-go.sum
+.idea/
+*.db
+*.yaml

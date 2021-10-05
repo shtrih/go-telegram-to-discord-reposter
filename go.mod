@@ -1,14 +1,14 @@
 module reposter
 
+go 1.16
+
 require (
-	github.com/bwmarrin/discordgo v0.18.0
-	github.com/go-telegram-bot-api/telegram-bot-api v4.6.2+incompatible
-	github.com/gorilla/websocket v1.3.0
-	github.com/jinzhu/gorm v1.9.1
-	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a
-	github.com/mattn/go-sqlite3 v1.9.0
-	github.com/technoweenie/multipartstreamer v1.0.1
-	golang.org/x/crypto v0.0.0-20180820150726-614d502a4dac
-	golang.org/x/net v0.0.0-20180826012351-8a410e7b638d
+	github.com/bwmarrin/discordgo v0.23.2
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.0.0-rc1
+	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/jinzhu/gorm v1.9.16
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
+	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
+	golang.org/x/sys v0.0.0-20211004093028-2c5d950f24ef // indirect
 	gopkg.in/yaml.v2 v2.2.1
 )

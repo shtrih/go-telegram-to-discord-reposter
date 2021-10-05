@@ -3,11 +3,10 @@ package main // import "reposter"
 import (
 	"flag"
 	"fmt"
+	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"net/http"
 	"os"
 	"os/signal"
-
-	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"reposter/config"
 	"reposter/database"
 	"reposter/dcapi"
@@ -42,12 +41,15 @@ func main() {
 		panic(err)
 	}
 
-	// Init http proxy transport
-	tr := proxy.NewProxyTransport(conf)
+	var tr *http.Transport
 
 	// http client with proxy
 	var client *http.Client
-	if conf.Proxy != nil {
+	if conf.Proxy == nil {
+		client = &http.Client{}
+	} else {
+		// Init http proxy transport
+		tr = proxy.NewProxyTransport(conf)
 		client = &http.Client{
 			Transport: tr,
 		}
@@ -79,7 +81,7 @@ func main() {
 	uc := tgbotapi.NewUpdate(0)
 	uc.Timeout = 60
 
-	updates, err := tgbot.GetUpdatesChan(uc)
+	updates := tgbot.GetUpdatesChan(uc)
 
 	// Graceful shutdown
 	s := make(chan os.Signal, 1)

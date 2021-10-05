@@ -2,7 +2,7 @@ package handler
 
 import (
 	"github.com/bwmarrin/discordgo"
-	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"net/http"
 	"reposter/config"
@@ -26,9 +26,9 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				return
 			}
 		} else if u.ChannelPost.Photo != nil {
-			if len(*u.ChannelPost.Photo) > 0 {
-				p := *u.ChannelPost.Photo
-				url, err := tgbot.GetFileDirectURL(p[len(*u.ChannelPost.Photo)-1].FileID)
+			if len(u.ChannelPost.Photo) > 0 {
+				p := u.ChannelPost.Photo
+				url, err := tgbot.GetFileDirectURL(p[len(u.ChannelPost.Photo)-1].FileID)
 				if err != nil {
 					log.Printf("Cannot get direct file URL! See error: %s", err.Error())
 					return
