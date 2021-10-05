@@ -116,13 +116,25 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		if fileID != nil {
 			url, err := tgbot.GetFileDirectURL(*fileID)
 			if err != nil {
-				log.Printf("Cannot get direct file URL! See error: %s", err.Error())
+				errr := fmt.Errorf("Cannot get direct file URL! Error: %s", err.Error())
+				log.Print(errr)
+
+				_, err2 := tgbot.Send(tgbotapi.NewMessage(u.ChannelPost.Chat.ID, errr.Error()))
+				if err2 != nil {
+					log.Print("cannot send tg msg", err2)
+				}
 				return
 			}
 
 			resp, err := client.Get(url)
 			if err != nil {
-				log.Printf("Cannot do GET request! See error: %s", err.Error())
+				errr := fmt.Errorf("Cannot do GET request! See error: %s", err.Error())
+				log.Print(errr)
+
+				_, err2 := tgbot.Send(tgbotapi.NewMessage(u.ChannelPost.Chat.ID, errr.Error()))
+				if err2 != nil {
+					log.Print("cannot send tg msg", err2)
+				}
 				return
 			}
 			defer resp.Body.Close()
@@ -141,7 +153,13 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				},
 			)
 			if err != nil {
-				log.Printf("Cannot send file! See error: %s", err.Error())
+				errr := fmt.Errorf("Cannot send file! See error: %s", err.Error())
+				log.Print(errr)
+
+				_, err2 := tgbot.Send(tgbotapi.NewMessage(u.ChannelPost.Chat.ID, errr.Error()))
+				if err2 != nil {
+					log.Print("cannot send tg msg", err2)
+				}
 			}
 		}
 
