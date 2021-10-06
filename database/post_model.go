@@ -8,6 +8,7 @@ type Post struct {
 	gorm.Model
 	Telegram int    `gorm:"unique"`
 	Discord  string `gorm:"unique"`
+	IsEmbed  bool
 }
 
 func (Post) TableName() string {

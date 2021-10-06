@@ -1,31 +1,65 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
-	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"net/http"
 	"reposter/config"
 	"reposter/database"
+	"time"
+
+	"github.com/Clinet/discordgo-embed"
+	"github.com/bwmarrin/discordgo"
+	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func formatMessage(msg *tgbotapi.Message) string {
+func PrettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	return string(s)
+}
+
+func embedSetVideo(e *embed.Embed, url string) {
+	e.MessageEmbed.Video = &discordgo.MessageEmbedVideo{
+		URL: url,
+	}
+}
+
+func embedSetTimestamp(e *embed.Embed, sec int) {
+	e.MessageEmbed.Timestamp = time.Unix(int64(sec), 0).Format(time.RFC3339)
+}
+
+func getAuthorSignature(msg *tgbotapi.Message) string {
 	authorSignature := ""
 	if msg.AuthorSignature != "" {
 		authorSignature = "`" + msg.AuthorSignature + "` "
 	}
 
+	return authorSignature
+}
+
+func getForwardedFrom(msg *tgbotapi.Message) string {
 	forwardedFrom := ""
 	if msg.ForwardFromChat != nil {
 		chatName := ""
 		if msg.ForwardFromChat.UserName != "" {
 			chatName = fmt.Sprintf(" (@%s)", msg.ForwardFromChat.UserName)
 		}
-		forwardedFrom = fmt.Sprintf("forwarded from `%s%s`", msg.ForwardFromChat.Title, chatName)
+		forwardedFrom = fmt.Sprintf("forwarded from «%s»%s", msg.ForwardFromChat.Title, chatName)
 	} else if msg.ForwardFrom != nil {
-		forwardedFrom = fmt.Sprintf("forwarded from `%s %s`", msg.ForwardFrom.FirstName, msg.ForwardFrom.LastName)
+		lastName := ""
+		if msg.ForwardFrom.LastName != "" {
+			lastName = " " + msg.ForwardFrom.LastName
+		}
+		forwardedFrom = fmt.Sprintf("forwarded from %s%s", msg.ForwardFrom.FirstName, lastName)
 	}
+
+	return forwardedFrom
+}
+
+func formatMessage(msg *tgbotapi.Message) string {
+	authorSignature := getAuthorSignature(msg)
+	forwardedFrom := getForwardedFrom(msg)
 
 	linebreak := ""
 	if authorSignature != "" || forwardedFrom != "" {
@@ -35,6 +69,24 @@ func formatMessage(msg *tgbotapi.Message) string {
 	return authorSignature + forwardedFrom + linebreak + msg.Caption + msg.Text
 }
 
+func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
+	result := embed.NewEmbed().
+		//SetTitle(getAuthorSignature(msg) + getForwardedFrom(msg)).
+		SetFooter(getAuthorSignature(msg) + getForwardedFrom(msg)).
+		SetDescription(msg.Text + msg.Caption).
+		SetColor(0x30a3e6).
+		Truncate()
+	if msg.ForwardFromMessageID == 0 {
+		embedSetTimestamp(result, msg.Date)
+	} else {
+		embedSetTimestamp(result, msg.ForwardDate)
+	}
+
+	return result
+}
+
+var LastMediaGroupID string
+
 func HandleUpdate(conf *config.Config, db *database.Database, client *http.Client, tgbot *tgbotapi.BotAPI, dcbot *discordgo.Session, u tgbotapi.Update) {
 	if u.ChannelPost != nil {
 		var m *discordgo.Message
@@ -42,11 +94,12 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		var fileID *string
 		var fileName string
 		var contentType string
+		embd := formatEmbed(u.ChannelPost)
 
 		// Send repost to Discord text channel
 		if u.ChannelPost.Text != "" {
 			var err error
-			m, err = dcbot.ChannelMessageSend(conf.Discord.ChannelID, formatMessage(u.ChannelPost))
+			m, err = dcbot.ChannelMessageSendEmbed(conf.Discord.ChannelID, embd.MessageEmbed)
 			if err != nil {
 				log.Printf("Cannot repost your post! See error: %s", err.Error())
 				return
@@ -67,13 +120,22 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				}
 				defer resp.Body.Close()
 
+				fileName = "photo.jpg"
+				embd.SetImage("attachment://" + fileName)
+
+				// Set "forwarded from" only for first message in media group
+				if LastMediaGroupID == u.ChannelPost.MediaGroupID && embd != nil {
+					embd.SetFooter("")
+				}
+
 				m, err = dcbot.ChannelMessageSendComplex(
 					conf.Discord.ChannelID,
 					&discordgo.MessageSend{
-						Content: formatMessage(u.ChannelPost),
+						Embed: embd.MessageEmbed,
+						//Content: formatMessage(u.ChannelPost),
 						Files: []*discordgo.File{
 							{
-								Name:        "photo.jpg",
+								Name:        fileName,
 								ContentType: "image/jpeg",
 								Reader:      resp.Body,
 							},
@@ -92,26 +154,36 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			fileID = &u.ChannelPost.Video.FileID
 			fileName = "video.mp4"
 			contentType = "video/mp4"
+			//embedSetVideo(embd, "attachment://" + fileName)
 		} else if u.ChannelPost.VideoNote != nil {
 			fileID = &u.ChannelPost.VideoNote.FileID
 			fileName = "videonote.mp4"
 			contentType = "video/mp4"
+			// Looks like embed videos not works anymore
+			//embedSetVideo(embd, "attachment://" + fileName)
 		} else if u.ChannelPost.Audio != nil {
 			fileID = &u.ChannelPost.Audio.FileID
 			fileName = u.ChannelPost.Audio.Performer + " - " + u.ChannelPost.Audio.Title + ".mp3"
 			contentType = "audio/mpeg"
+			embd = nil
 		} else if u.ChannelPost.Voice != nil {
 			fileID = &u.ChannelPost.Voice.FileID
 			fileName = "voice.ogg"
 			contentType = "audio/ogg"
+			embd = nil
 		} else if u.ChannelPost.Sticker != nil {
-			msg, err := dcbot.ChannelMessageSend(conf.Discord.ChannelID, formatMessage(u.ChannelPost) + "sticker: " + u.ChannelPost.Sticker.Emoji)
-			if err != nil {
-				log.Printf("Cannot repost sticker! See error: %s", err.Error())
-				return
-			}
-			m = msg
+			fileID = &u.ChannelPost.Sticker.Thumbnail.FileID
+			fileName = "sticker.jpg"
+			contentType = "image/jpeg"
+			embd.SetTitle(u.ChannelPost.Sticker.Emoji)
+			embd.SetImage("attachment://" + fileName)
 		}
+
+		// Set "forwarded from" only for first message in media group
+		if LastMediaGroupID == u.ChannelPost.MediaGroupID && embd != nil {
+			embd.SetFooter("")
+		}
+		LastMediaGroupID = u.ChannelPost.MediaGroupID
 
 		if fileID != nil {
 			url, err := tgbot.GetFileDirectURL(*fileID)
@@ -139,18 +211,28 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			}
 			defer resp.Body.Close()
 
+			files := []*discordgo.File{
+				{
+					Name:        fileName,
+					ContentType: contentType,
+					Reader:      resp.Body,
+				},
+			}
+			var messageSend *discordgo.MessageSend
+			if embd == nil {
+				messageSend = &discordgo.MessageSend{
+					Content: u.ChannelPost.Caption + u.ChannelPost.Text,
+					Files: files,
+				}
+			} else {
+				messageSend = &discordgo.MessageSend{
+					Embed: embd.MessageEmbed,
+					Files: files,
+				}
+			}
 			m, err = dcbot.ChannelMessageSendComplex(
 				conf.Discord.ChannelID,
-				&discordgo.MessageSend{
-					Content: formatMessage(u.ChannelPost),
-					Files: []*discordgo.File{
-						{
-							Name:        fileName,
-							ContentType: contentType,
-							Reader:      resp.Body,
-						},
-					},
-				},
+				messageSend,
 			)
 			if err != nil {
 				errr := fmt.Errorf("Cannot send file! See error: %s", err.Error())
@@ -170,6 +252,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				Data: &database.Post{
 					Telegram: u.ChannelPost.MessageID,
 					Discord:  m.ID,
+					IsEmbed: embd != nil,
 				},
 			}
 			if err := pm.Create(); err != nil {
@@ -192,7 +275,11 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 
 		// Edit it with id that we got
 		if u.EditedChannelPost.Text != "" || u.EditedChannelPost.Caption != "" {
-			_, err = dcbot.ChannelMessageEdit(conf.Discord.ChannelID, pm.Data.Discord, formatMessage(u.EditedChannelPost))
+			if pm.Data.IsEmbed {
+				_, err = dcbot.ChannelMessageEditEmbed(conf.Discord.ChannelID, pm.Data.Discord, formatEmbed(u.EditedChannelPost).MessageEmbed)
+			} else {
+				_, err = dcbot.ChannelMessageEdit(conf.Discord.ChannelID, pm.Data.Discord, u.EditedChannelPost.Caption + u.EditedChannelPost.Text)
+			}
 			if err != nil {
 				log.Printf("Cannot edit repost! See error: %s", err.Error())
 			}

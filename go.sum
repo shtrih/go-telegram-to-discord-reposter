@@ -1,3 +1,5 @@
+github.com/Clinet/discordgo-embed v0.0.0-20190411043415-d754bc1a576c h1:XB4X3MWxiq+Tb0lmc6CY1S9t5sJG1zFCrfpGQuKEGFc=
+github.com/Clinet/discordgo-embed v0.0.0-20190411043415-d754bc1a576c/go.mod h1:0ydUl+01209LCyzJk68BeRtCN1IMrNJgX4IBmwmC1f8=
 github.com/PuerkitoBio/goquery v1.5.1/go.mod h1:GsLWisAFVj4WgDibEWF4pvYnkVQBpKBKeU+7zCJoLcc=
 github.com/andybalholm/cascadia v1.1.0/go.mod h1:GsXiBklL0woXo1j/WYWtSYYC4ouU9PqHO0sqidkEA4Y=
 github.com/bwmarrin/discordgo v0.23.2 h1:BzrtTktixGHIu9Tt7dEE6diysEF9HWnXeHuoJEt2fH4=
