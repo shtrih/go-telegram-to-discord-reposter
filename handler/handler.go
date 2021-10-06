@@ -124,7 +124,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				embd.SetImage("attachment://" + fileName)
 
 				// Set "forwarded from" only for first message in media group
-				if LastMediaGroupID == u.ChannelPost.MediaGroupID && embd != nil {
+				if LastMediaGroupID != "" && LastMediaGroupID == u.ChannelPost.MediaGroupID && embd != nil {
 					embd.SetFooter("")
 				}
 
@@ -165,12 +165,10 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			fileID = &u.ChannelPost.Audio.FileID
 			fileName = u.ChannelPost.Audio.Performer + " - " + u.ChannelPost.Audio.Title + ".mp3"
 			contentType = "audio/mpeg"
-			embd = nil
 		} else if u.ChannelPost.Voice != nil {
 			fileID = &u.ChannelPost.Voice.FileID
 			fileName = "voice.ogg"
 			contentType = "audio/ogg"
-			embd = nil
 		} else if u.ChannelPost.Sticker != nil {
 			fileID = &u.ChannelPost.Sticker.Thumbnail.FileID
 			fileName = "sticker.jpg"
@@ -180,7 +178,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		}
 
 		// Set "forwarded from" only for first message in media group
-		if LastMediaGroupID == u.ChannelPost.MediaGroupID && embd != nil {
+		if LastMediaGroupID != "" && LastMediaGroupID == u.ChannelPost.MediaGroupID && embd != nil {
 			embd.SetFooter("")
 		}
 		LastMediaGroupID = u.ChannelPost.MediaGroupID
@@ -221,7 +219,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			var messageSend *discordgo.MessageSend
 			if embd == nil {
 				messageSend = &discordgo.MessageSend{
-					Content: u.ChannelPost.Caption + u.ChannelPost.Text,
+					Content: formatMessage(u.ChannelPost),
 					Files: files,
 				}
 			} else {
