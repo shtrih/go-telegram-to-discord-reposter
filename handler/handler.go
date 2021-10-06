@@ -177,6 +177,11 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			embd.SetImage("attachment://" + fileName)
 		}
 
+		// If description is empty then no need embed
+		if embd.MessageEmbed.Description == "" && embd.MessageEmbed.Image == nil {
+			embd = nil
+		}
+
 		// Set "forwarded from" only for first message in media group
 		if LastMediaGroupID != "" && LastMediaGroupID == u.ChannelPost.MediaGroupID && embd != nil {
 			embd.SetFooter("")
