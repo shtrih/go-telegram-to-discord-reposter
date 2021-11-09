@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reposter/config"
 	"reposter/database"
+	"reposter/tgapi"
 	"time"
 
 	"github.com/Clinet/discordgo-embed"
@@ -80,7 +81,8 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	// https://discord.com/developers/docs/resources/channel#embed-limits
 	// For now TG text limit also 4096 so no need any truncations.
 	// https://core.telegram.org/bots/api#message
-	result.Description = msg.Text + msg.Caption
+	result.Description = tgapi.EntitiesToDiscordMarkdown(msg.Text, msg.Entities)
+	result.Description += tgapi.EntitiesToDiscordMarkdown(msg.Caption, msg.CaptionEntities)
 
 	if msg.ForwardFromMessageID == 0 {
 		embedSetTimestamp(result, msg.Date)
