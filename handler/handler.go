@@ -73,9 +73,15 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	result := embed.NewEmbed().
 		//SetTitle(getAuthorSignature(msg) + getForwardedFrom(msg)).
 		SetFooter(getAuthorSignature(msg) + getForwardedFrom(msg)).
-		SetDescription(msg.Text + msg.Caption).
 		SetColor(0x30a3e6).
 		Truncate()
+
+	// SetDescription() truncates text at 2048, but actual limit is 4096
+	// https://discord.com/developers/docs/resources/channel#embed-limits
+	// For now TG text limit also 4096 so no need any truncations.
+	// https://core.telegram.org/bots/api#message
+	result.Description = msg.Text + msg.Caption
+
 	if msg.ForwardFromMessageID == 0 {
 		embedSetTimestamp(result, msg.Date)
 	} else {
