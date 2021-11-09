@@ -170,11 +170,14 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			fileName = "voice.ogg"
 			contentType = "audio/ogg"
 		} else if u.ChannelPost.Sticker != nil {
-			fileID = &u.ChannelPost.Sticker.Thumbnail.FileID
-			fileName = "sticker.jpg"
-			contentType = "image/jpeg"
-			embd.SetTitle(u.ChannelPost.Sticker.Emoji)
-			embd.SetImage("attachment://" + fileName)
+			// Webp image loads as sticker without thumbnail
+			if u.ChannelPost.Sticker.Thumbnail != nil {
+				fileID = &u.ChannelPost.Sticker.Thumbnail.FileID
+				fileName = "sticker.jpg"
+				contentType = "image/jpeg"
+				embd.SetTitle(u.ChannelPost.Sticker.Emoji)
+				embd.SetImage("attachment://" + fileName)
+			}
 		}
 
 		// If description is empty then no need embed
