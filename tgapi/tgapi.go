@@ -8,7 +8,7 @@ import (
 
 func NewBot(conf *config.Config, tr *http.Transport) (*tgbotapi.BotAPI, error) {
 	if conf.Proxy != nil {
-		return tgbotapi.NewBotAPIWithClient(conf.Telegram.Token, &http.Client{
+		return tgbotapi.NewBotAPIWithClient(conf.Telegram.Token, tgbotapi.APIEndpoint, &http.Client{
 			Transport: tr,
 		})
 	} else {
