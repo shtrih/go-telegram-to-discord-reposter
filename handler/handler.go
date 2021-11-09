@@ -32,7 +32,7 @@ func embedSetTimestamp(e *embed.Embed, sec int) {
 func getAuthorSignature(msg *tgbotapi.Message) string {
 	authorSignature := ""
 	if msg.AuthorSignature != "" {
-		authorSignature = "`" + msg.AuthorSignature + "` "
+		authorSignature = msg.AuthorSignature + " "
 	}
 
 	return authorSignature
