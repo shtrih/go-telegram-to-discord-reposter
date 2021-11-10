@@ -18,10 +18,12 @@ func init() {
 	}
 }
 
-// EntitiesToDiscordMarkdown converts plain text with entities to markdown
+// EntitiesToDiscordMarkdown converts plain text with Entities to Markdown and escapes Markdown special symbols (but it's not escapes those symbols in urls).
 // https://core.telegram.org/bots/api#messageentity
 func EntitiesToDiscordMarkdown(text string, messageEntities []tgbotapi.MessageEntity) string {
 	insertions := make(map[int]string)
+	noEscape := make(map[int]*struct{})
+	strct := struct {}{}
 	for _, e := range messageEntities {
 		var before, after string
 
@@ -46,6 +48,10 @@ func EntitiesToDiscordMarkdown(text string, messageEntities []tgbotapi.MessageEn
 		} else if e.IsTextLink() {
 			before = "["
 			after = fmt.Sprintf(`](%s "%s")`, e.URL, e.URL)
+		} else if e.IsURL() {
+			for i := e.Offset; i < e.Offset+e.Length; i++ {
+				noEscape[i] = &strct
+			}
 		}
 		if before != "" {
 			insertions[e.Offset] += before
@@ -58,7 +64,8 @@ func EntitiesToDiscordMarkdown(text string, messageEntities []tgbotapi.MessageEn
 	utf16pos := 0
 	for _, c := range input {
 		output = append(output, []rune(insertions[utf16pos])...)
-		if _, has := needEscape[c]; has {
+		_, stopEscaping := noEscape[utf16pos]
+		if _, has := needEscape[c]; has && !stopEscaping {
 			output = append(output, '\\')
 		}
 		output = append(output, c)

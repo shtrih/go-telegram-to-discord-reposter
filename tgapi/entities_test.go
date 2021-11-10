@@ -102,10 +102,27 @@ func TestEntities(t *testing.T) {
 			},
 			Expected: "㊗️ Lorem markdownum temptabat",
 		},
+		"url": {
+			Text: "㊗️ Lorem https://t.me/#foo-bar temptabat",
+			Entities: []tgbotapi.MessageEntity{
+				{
+					Type:   "url",
+					Offset: 9,
+					Length: 21,
+				},
+			},
+			Expected: "㊗️ Lorem https://t.me/#foo-bar temptabat",
+		},
 		"escape": {
-			Text:     "㊗️ *Lorem* _markdownum_ ~temptabat~ ![lorem](ipsum) __dolor__ >sit amet",
-			Entities: nil,
-			Expected: "㊗️ \\*Lorem\\* \\_markdownum\\_ \\~temptabat\\~ \\!\\[lorem\\]\\(ipsum\\) \\_\\_dolor\\_\\_ \\>sit amet",
+			Text:     "㊗️ *Lorem* _markdownum_ https://t.me/f?foo ~temptabat~ ![lorem](ipsum) __dolor__ >sit amet",
+			Entities: []tgbotapi.MessageEntity{
+				{
+					Type:   "url",
+					Offset: 24,
+					Length: 18,
+				},
+			},
+			Expected: "㊗️ \\*Lorem\\* \\_markdownum\\_ https://t.me/f?foo \\~temptabat\\~ \\!\\[lorem\\]\\(ipsum\\) \\_\\_dolor\\_\\_ \\>sit amet",
 		},
 		"complex": {
 			Text: "Lorem markdownum _temptabat usus rapta_ superesse uno segetes reponere decens,\n#carinae ~__*quis*__~.",
