@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"reposter/config"
 	"reposter/database"
 	"reposter/tgapi"
@@ -71,18 +72,47 @@ func formatMessage(msg *tgbotapi.Message) string {
 }
 
 func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
+	forwardedFrom := getForwardedFrom(msg)
 	result := embed.NewEmbed().
 		//SetTitle(getAuthorSignature(msg) + getForwardedFrom(msg)).
-		SetFooter(getAuthorSignature(msg) + getForwardedFrom(msg)).
+		SetFooter(getAuthorSignature(msg) + forwardedFrom).
 		SetColor(0x30a3e6).
 		Truncate()
 
-	// SetDescription() truncates text at 2048, but actual limit is 4096
+	// Hide Telegram internal links if forward source hidden by user
+	var textEntities, captionEntities []tgbotapi.MessageEntity
+	text, textCaption := msg.Text, msg.Caption
+	if forwardedFrom == "" {
+		for _, e := range msg.Entities {
+			if e.IsTextLink() && e.URL[:13] == "https://t.me/" {
+				e.URL = "https://t.me/#link-hidden-in-discord"
+			}
+			textEntities = append(textEntities, e)
+		}
+		for _, e := range msg.CaptionEntities {
+			if e.IsTextLink() && e.URL[:13] == "https://t.me/" {
+				e.URL = "https://t.me/#link-hidden-in-discord"
+			}
+			captionEntities = append(captionEntities, e)
+		}
+	}
+
+	text = tgapi.EntitiesToDiscordMarkdown(text, textEntities)
+	textCaption = tgapi.EntitiesToDiscordMarkdown(textCaption, captionEntities)
+
+	// Hide Telegram internal links if forward source hidden by user
+	if forwardedFrom == "" {
+		var re = regexp.MustCompile(`(https[:]//t[.]me/)[^\s]+\b`)
+		text = re.ReplaceAllString(text, `$1#link-hidden-in-discord`)
+		textCaption = re.ReplaceAllString(textCaption, `$1#link-hidden-in-discord`)
+	}
+
+	// embed.SetDescription() truncates text at 2048, but actual limit is 4096
 	// https://discord.com/developers/docs/resources/channel#embed-limits
 	// For now TG text limit also 4096 so no need any truncations.
 	// https://core.telegram.org/bots/api#message
-	result.Description = tgapi.EntitiesToDiscordMarkdown(msg.Text, msg.Entities)
-	result.Description += tgapi.EntitiesToDiscordMarkdown(msg.Caption, msg.CaptionEntities)
+	result.Description = text
+	result.Description += textCaption
 
 	if msg.ForwardFromMessageID == 0 {
 		embedSetTimestamp(result, msg.Date)
