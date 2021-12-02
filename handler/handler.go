@@ -95,6 +95,8 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 			}
 			captionEntities = append(captionEntities, e)
 		}
+	} else {
+		textEntities, captionEntities = msg.Entities, msg.CaptionEntities
 	}
 
 	text = tgapi.EntitiesToDiscordMarkdown(text, textEntities)
