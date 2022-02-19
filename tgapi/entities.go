@@ -23,7 +23,13 @@ func init() {
 func EntitiesToDiscordMarkdown(text string, messageEntities []tgbotapi.MessageEntity) string {
 	insertions := make(map[int]string)
 	noEscape := make(map[int]*struct{})
-	strct := struct {}{}
+	strct := struct{}{}
+	stopEscape := func(e *tgbotapi.MessageEntity) {
+		for i := e.Offset; i < e.Offset+e.Length; i++ {
+			noEscape[i] = &strct
+		}
+	}
+
 	for _, e := range messageEntities {
 		var before, after string
 
@@ -42,16 +48,16 @@ func EntitiesToDiscordMarkdown(text string, messageEntities []tgbotapi.MessageEn
 		} else if e.IsCode() {
 			before = "`"
 			after = "`"
+			stopEscape(&e)
 		} else if e.IsPre() {
 			before = "```" + e.Language
 			after = "```"
+			stopEscape(&e)
 		} else if e.IsTextLink() {
 			before = "["
 			after = fmt.Sprintf(`](%s "%s")`, e.URL, e.URL)
 		} else if e.IsURL() {
-			for i := e.Offset; i < e.Offset+e.Length; i++ {
-				noEscape[i] = &strct
-			}
+			stopEscape(&e)
 		}
 		if before != "" {
 			insertions[e.Offset] += before
