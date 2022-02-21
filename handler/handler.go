@@ -142,6 +142,11 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			m, err = dcbot.ChannelMessageSendEmbed(conf.Discord.ChannelID, embd.MessageEmbed)
 			if err != nil {
 				log.Printf("Cannot repost your post! See error: %s", err.Error())
+
+				_, err2 := tgbot.Send(tgbotapi.NewMessage(u.ChannelPost.Chat.ID, err.Error()))
+				if err2 != nil {
+					log.Print("cannot send tg msg", err2)
+				}
 				return
 			}
 		} else if u.ChannelPost.Photo != nil {
