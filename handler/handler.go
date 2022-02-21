@@ -301,7 +301,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			pm := database.PostManager{
 				DB: db.Conn,
 				Data: &database.Post{
-					Telegram: fmt.Sprintf("%d,%d", u.EditedChannelPost.Chat.ID, u.ChannelPost.MessageID),
+					Telegram: fmt.Sprintf("%d,%d", u.ChannelPost.Chat.ID, u.ChannelPost.MessageID),
 					Discord:  m.ID,
 					IsEmbed:  embd != nil,
 				},
