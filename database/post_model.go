@@ -6,7 +6,7 @@ import (
 
 type Post struct {
 	gorm.Model
-	Telegram int    `gorm:"unique"`
+	Telegram string `gorm:"unique"`
 	Discord  string `gorm:"unique"`
 	IsEmbed  bool
 }

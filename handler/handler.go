@@ -11,7 +11,7 @@ import (
 	"reposter/tgapi"
 	"time"
 
-	"github.com/Clinet/discordgo-embed"
+	embed "github.com/Clinet/discordgo-embed"
 	"github.com/bwmarrin/discordgo"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -116,7 +116,7 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	result.Description = text
 	result.Description += textCaption
 
-	if msg.ForwardFromMessageID == 0 {
+	if msg.ForwardDate == 0 {
 		embedSetTimestamp(result, msg.Date)
 	} else {
 		embedSetTimestamp(result, msg.ForwardDate)
@@ -268,7 +268,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			if embd == nil {
 				messageSend = &discordgo.MessageSend{
 					Content: formatMessage(u.ChannelPost),
-					Files: files,
+					Files:   files,
 				}
 			} else {
 				messageSend = &discordgo.MessageSend{
@@ -296,13 +296,13 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			pm := database.PostManager{
 				DB: db.Conn,
 				Data: &database.Post{
-					Telegram: u.ChannelPost.MessageID,
+					Telegram: fmt.Sprintf("%d,%d", u.EditedChannelPost.Chat.ID, u.ChannelPost.MessageID),
 					Discord:  m.ID,
-					IsEmbed: embd != nil,
+					IsEmbed:  embd != nil,
 				},
 			}
 			if err := pm.Create(); err != nil {
-				log.Printf("Cannot create new record in database! See error: %s", err.Error())
+				log.Printf("Cannot create new record in database! TG: %s. gSee error: %s", err.Error(), pm.Data.Telegram)
 			}
 		}
 	} else if u.EditedChannelPost != nil {
@@ -310,7 +310,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		pm := database.PostManager{
 			DB: db.Conn,
 			Data: &database.Post{
-				Telegram: u.EditedChannelPost.MessageID,
+				Telegram: fmt.Sprintf("%d,%d", u.EditedChannelPost.Chat.ID, u.EditedChannelPost.MessageID),
 			},
 		}
 		err := pm.FindByTelegramPost()
@@ -324,7 +324,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			if pm.Data.IsEmbed {
 				_, err = dcbot.ChannelMessageEditEmbed(conf.Discord.ChannelID, pm.Data.Discord, formatEmbed(u.EditedChannelPost).MessageEmbed)
 			} else {
-				_, err = dcbot.ChannelMessageEdit(conf.Discord.ChannelID, pm.Data.Discord, u.EditedChannelPost.Caption + u.EditedChannelPost.Text)
+				_, err = dcbot.ChannelMessageEdit(conf.Discord.ChannelID, pm.Data.Discord, u.EditedChannelPost.Caption+u.EditedChannelPost.Text)
 			}
 			if err != nil {
 				log.Printf("Cannot edit repost! See error: %s", err.Error())
