@@ -125,6 +125,13 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	return result
 }
 
+func IsJustLink(msg *tgbotapi.Message) bool {
+	if len(msg.Entities) == 1 && msg.Entities[0].IsURL() {
+		return true
+	}
+	return false
+}
+
 var LastMediaGroupID string
 
 func HandleUpdate(conf *config.Config, db *database.Database, client *http.Client, tgbot *tgbotapi.BotAPI, dcbot *discordgo.Session, u tgbotapi.Update) {
@@ -139,7 +146,12 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		// Send repost to Discord text channel
 		if u.ChannelPost.Text != "" {
 			var err error
-			m, err = dcbot.ChannelMessageSendEmbed(conf.Discord.ChannelID, embd.MessageEmbed)
+			// Post links as text to have preview
+			if IsJustLink(u.ChannelPost) {
+				m, err = dcbot.ChannelMessageSend(conf.Discord.ChannelID, u.ChannelPost.Text)
+			} else {
+				m, err = dcbot.ChannelMessageSendEmbed(conf.Discord.ChannelID, embd.MessageEmbed)
+			}
 			if err != nil {
 				log.Printf("Cannot repost your post! See error: %s", err.Error())
 
