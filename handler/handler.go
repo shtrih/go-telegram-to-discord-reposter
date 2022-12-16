@@ -125,7 +125,7 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	return result
 }
 
-func IsJustLink(msg *tgbotapi.Message) bool {
+func isJustLink(msg *tgbotapi.Message) bool {
 	if len(msg.Entities) == 1 && msg.Entities[0].IsURL() {
 		return true
 	}
@@ -147,7 +147,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		if u.ChannelPost.Text != "" {
 			var err error
 			// Post links as text to have preview
-			if IsJustLink(u.ChannelPost) {
+			if isJustLink(u.ChannelPost) {
 				m, err = dcbot.ChannelMessageSend(conf.Discord.ChannelID, u.ChannelPost.Text)
 			} else {
 				m, err = dcbot.ChannelMessageSendEmbed(conf.Discord.ChannelID, embd.MessageEmbed)
@@ -201,6 +201,12 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				)
 				if err != nil {
 					log.Printf("Cannot send file! See error: %s", err.Error())
+
+					_, err2 := tgbot.Send(tgbotapi.NewMessage(u.ChannelPost.Chat.ID, err.Error()))
+					if err2 != nil {
+						log.Print("cannot send tg msg", err2)
+					}
+					return
 				}
 			}
 		} else if u.ChannelPost.Document != nil {
@@ -234,6 +240,40 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				contentType = "image/jpeg"
 				embd.SetTitle(u.ChannelPost.Sticker.Emoji)
 				embd.SetImage("attachment://" + fileName)
+			}
+		} else if u.ChannelPost.Poll != nil {
+			explanation := ""
+			correctOption := make(map[int]string)
+
+			embd.MessageEmbed.Description = fmt.Sprintf("Multiple answers: %v\n", u.ChannelPost.Poll.AllowsMultipleAnswers)
+			if !u.ChannelPost.Poll.IsClosed {
+				embd.MessageEmbed.Description += fmt.Sprintf("Poll is open.\n")
+			}
+			if u.ChannelPost.Poll.Type == "quiz" {
+				embd.MessageEmbed.Description += fmt.Sprintf("Mode: quiz.\n")
+				correctOption[u.ChannelPost.Poll.CorrectOptionID] = "✅"
+				explanation = "\nExplanation:\n> " + tgapi.EntitiesToDiscordMarkdown(u.ChannelPost.Poll.Explanation, u.ChannelPost.Poll.ExplanationEntities)
+			}
+			embd.MessageEmbed.Description += "\n" + u.ChannelPost.Poll.Question
+			options := "\n\n"
+
+			for i, option := range u.ChannelPost.Poll.Options {
+				options += fmt.Sprintf(" • %s %s (%d)\n", correctOption[i], option.Text, option.VoterCount)
+			}
+			embd.MessageEmbed.Description += options
+			embd.MessageEmbed.Description += fmt.Sprintf("\nVotes: %d\n", u.ChannelPost.Poll.TotalVoterCount)
+			embd.MessageEmbed.Description += explanation
+
+			var err error
+			m, err = dcbot.ChannelMessageSendEmbed(conf.Discord.ChannelID, embd.MessageEmbed)
+			if err != nil {
+				log.Printf("Cannot repost your post! See error: %s", err.Error())
+
+				_, err2 := tgbot.Send(tgbotapi.NewMessage(u.ChannelPost.Chat.ID, err.Error()))
+				if err2 != nil {
+					log.Print("cannot send tg msg", err2)
+				}
+				return
 			}
 		}
 
