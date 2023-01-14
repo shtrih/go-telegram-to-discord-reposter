@@ -126,7 +126,7 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 }
 
 func isJustLink(msg *tgbotapi.Message) bool {
-	if len(msg.Entities) == 1 && msg.Entities[0].IsURL() {
+	if len(msg.Entities) == 1 && msg.Entities[0].IsURL() && msg.Entities[0].Length == len(msg.Text) {
 		return true
 	}
 	return false
@@ -148,7 +148,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			var err error
 			// Post links as text to have preview
 			if isJustLink(u.ChannelPost) {
-				m, err = dcbot.ChannelMessageSend(conf.Discord.ChannelID, u.ChannelPost.Text)
+				m, err = dcbot.ChannelMessageSend(conf.Discord.ChannelID, formatMessage(u.ChannelPost))
 			} else {
 				m, err = dcbot.ChannelMessageSendEmbed(conf.Discord.ChannelID, embd.MessageEmbed)
 			}
