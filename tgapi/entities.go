@@ -2,8 +2,9 @@ package tgapi
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"unicode/utf16"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // Copyright (c) 2020 ratpoison4
@@ -61,7 +62,7 @@ func EntitiesToDiscordMarkdown(text string, messageEntities []tgbotapi.MessageEn
 		}
 		if before != "" {
 			insertions[e.Offset] += before
-			insertions[e.Offset+e.Length] += after
+			insertions[e.Offset+e.Length] = after + insertions[e.Offset+e.Length]
 		}
 	}
 

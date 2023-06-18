@@ -1,8 +1,9 @@
 package tgapi
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"testing"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type TestCase struct {
@@ -114,7 +115,7 @@ func TestEntities(t *testing.T) {
 			Expected: "㊗️ Lorem https://t.me/#foo-bar temptabat",
 		},
 		"escape": {
-			Text:     "㊗️ *Lorem* _markdownum_ https://t.me/f?foo ~temptabat~ ![lorem](ipsum) __dolor__ >sit amet",
+			Text: "㊗️ *Lorem* _markdownum_ https://t.me/f?foo ~temptabat~ ![lorem](ipsum) __dolor__ >sit amet",
 			Entities: []tgbotapi.MessageEntity{
 				{
 					Type:   "url",
@@ -124,11 +125,32 @@ func TestEntities(t *testing.T) {
 			},
 			Expected: "㊗️ \\*Lorem\\* \\_markdownum\\_ https://t.me/f?foo \\~temptabat\\~ \\!\\[lorem\\]\\(ipsum\\) \\_\\_dolor\\_\\_ \\>sit amet",
 		},
+		"adjacent": {
+			Text: "㊗️ Lorem markdownum temptabat",
+			Entities: []tgbotapi.MessageEntity{
+				{
+					Type:   "bold",
+					Offset: 0,
+					Length: 8,
+				},
+				{
+					Type:   "italic",
+					Offset: 8,
+					Length: 11,
+				},
+			},
+			Expected: `**㊗️ Lorem**_ markdownum_ temptabat`,
+		},
 		"complex": {
 			Text: "Lorem markdownum _temptabat usus rapta_ superesse uno segetes reponere decens,\n#carinae ~__*quis*__~.",
 			Entities: []tgbotapi.MessageEntity{
 				{
 					Type:   "bold",
+					Offset: 0,
+					Length: 5,
+				},
+				{
+					Type:   "italic",
 					Offset: 0,
 					Length: 5,
 				},
@@ -159,12 +181,17 @@ func TestEntities(t *testing.T) {
 					URL:    "https://example.com/",
 				},
 				{
+					Type:   "bold",
+					Offset: 54,
+					Length: 7,
+				},
+				{
 					Type:   "hashtag",
 					Offset: 81,
 					Length: 8,
 				},
 			},
-			Expected: "**Lorem** _markdownum_ \\_temptabat __usus__ rapta\\_ ~~superesse~~ `uno` [segetes](https://example.com/ \"https://example.com/\") reponere decens,\n\\#carinae \\~\\_\\_\\*quis\\*\\_\\_\\~\\.",
+			Expected: "**_Lorem_** _markdownum_ \\_temptabat __usus__ rapta\\_ ~~superesse~~ `uno` [**segetes**](https://example.com/ \"https://example.com/\") reponere decens,\n\\#carinae \\~\\_\\_\\*quis\\*\\_\\_\\~\\.",
 		},
 	}
 
