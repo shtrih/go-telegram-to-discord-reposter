@@ -6,10 +6,11 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"time"
+
 	"reposter/config"
 	"reposter/database"
 	"reposter/tgapi"
-	"time"
 
 	embed "github.com/Clinet/discordgo-embed"
 	"github.com/bwmarrin/discordgo"
@@ -73,16 +74,17 @@ func formatMessage(msg *tgbotapi.Message) string {
 
 func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	forwardedFrom := getForwardedFrom(msg)
+	authorSignature := getAuthorSignature(msg)
 	result := embed.NewEmbed().
 		//SetTitle(getAuthorSignature(msg) + getForwardedFrom(msg)).
-		SetFooter(getAuthorSignature(msg) + forwardedFrom).
+		SetFooter(authorSignature + forwardedFrom).
 		SetColor(0x30a3e6).
 		Truncate()
 
 	// Hide Telegram internal links if forward source hidden by user
 	var textEntities, captionEntities []tgbotapi.MessageEntity
 	text, textCaption := msg.Text, msg.Caption
-	if forwardedFrom == "" {
+	if forwardedFrom == "" && authorSignature == "" {
 		for _, e := range msg.Entities {
 			if e.IsTextLink() && e.URL[:13] == "https://t.me/" {
 				e.URL = "https://t.me/#link-hidden-in-discord"
@@ -103,7 +105,7 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	textCaption = tgapi.EntitiesToDiscordMarkdown(textCaption, captionEntities)
 
 	// Hide Telegram internal links if forward source hidden by user
-	if forwardedFrom == "" {
+	if forwardedFrom == "" && authorSignature == "" {
 		var re = regexp.MustCompile(`(https[:]//t[.]me/)[^\s]+\b`)
 		text = re.ReplaceAllString(text, `$1#link-hidden-in-discord`)
 		textCaption = re.ReplaceAllString(textCaption, `$1#link-hidden-in-discord`)
