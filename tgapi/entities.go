@@ -56,7 +56,9 @@ func EntitiesToDiscordMarkdown(text string, messageEntities []tgbotapi.MessageEn
 			stopEscape(&e)
 		} else if e.IsTextLink() {
 			before = "["
-			after = fmt.Sprintf(`](%s "%s")`, e.URL, e.URL)
+			//after = fmt.Sprintf(`](%s "%s")`, e.URL, e.URL)
+			// this doesn't work anymore ↑
+			after = fmt.Sprintf(`](%s)`, e.URL)
 		} else if e.IsURL() {
 			stopEscape(&e)
 		}
