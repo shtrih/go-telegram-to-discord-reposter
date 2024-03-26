@@ -72,6 +72,16 @@ func formatMessage(msg *tgbotapi.Message) string {
 	return authorSignature + forwardedFrom + linebreak + msg.Caption + msg.Text
 }
 
+func getPostLink(msg *tgbotapi.Message) string {
+	var result string
+	if msg.ForwardFromChat != nil {
+		if msg.ForwardFromChat.UserName != `` && msg.ForwardFromMessageID != 0 {
+			result = fmt.Sprintf(`https://t.me/%s/%d`, msg.ForwardFromChat.UserName, msg.ForwardFromMessageID)
+		}
+	}
+	return result
+}
+
 func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	forwardedFrom := getForwardedFrom(msg)
 	authorSignature := getAuthorSignature(msg)
@@ -109,6 +119,10 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 		var re = regexp.MustCompile(`(https[:]//t[.]me/)[^\s]+\b`)
 		text = re.ReplaceAllString(text, `$1#link-hidden-in-discord`)
 		textCaption = re.ReplaceAllString(textCaption, `$1#link-hidden-in-discord`)
+	} else {
+		if link := getPostLink(msg); link != `` {
+			result.AddField(`—`, link).InlineAllFields()
+		}
 	}
 
 	// embed.SetDescription() truncates text at 2048, but actual limit is 4096
