@@ -1,5 +1,13 @@
 # https://github.com/mattn/go-sqlite3#dsn-examples
 database: "file:store.db"
+# How long forwarded posts stay editable via Discord (edits to older
+# posts are skipped, and database records older than this are cleaned).
+# Duration string, "24h" by default; "0" disables cleanup entirely.
+retention: "24h"
+# Per-file upload limit in MiB. Files larger than this are not forwarded;
+# the bot posts a notice with a "resend without these files" button instead.
+# 20 by default (Discord's default per-file limit).
+max_file_size_mb: 20
 telegram:
   token: ""
   debug: true

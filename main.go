@@ -13,6 +13,9 @@ import (
 	"reposter/handler"
 	"reposter/proxy"
 	"reposter/tgapi"
+	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 var (
@@ -80,6 +83,29 @@ func main() {
 		panic(err)
 	}
 
+	// Skipped oversized files and their resend buttons. Interaction events
+	// (button clicks) arrive on discordgo goroutines.
+	retry := handler.NewRetryStore()
+	dcbot.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		handler.HandleInteraction(conf, db, s, retry, i)
+	})
+
+	// Clean records older than the edit window once and every hour after
+	cleanup := func() {
+		if n, err := db.Cleanup(conf.EditWindow); err != nil {
+			fmt.Println("Database cleanup failed! See, error:")
+			fmt.Println(err)
+		} else if n > 0 {
+			fmt.Printf("Database cleanup: removed %d old record(s)\n", n)
+		}
+	}
+	cleanup()
+	go func() {
+		for range time.Tick(time.Hour) {
+			cleanup()
+		}
+	}()
+
 	uc := tgbotapi.NewUpdate(0)
 	uc.Timeout = 60
 
@@ -98,6 +124,6 @@ func main() {
 
 	// Main loop, check all changes in Telegram Channel
 	for u := range updates {
-		handler.HandleUpdate(conf, db, client, tgbot, dcbot, u)
+		handler.HandleUpdate(conf, db, client, tgbot, dcbot, retry, u)
 	}
 }
