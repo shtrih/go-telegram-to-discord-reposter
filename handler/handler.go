@@ -14,7 +14,7 @@ import (
 
 	embed "github.com/Clinet/discordgo-embed"
 	"github.com/bwmarrin/discordgo"
-	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/OvyFlash/telegram-bot-api"
 )
 
 func PrettyPrint(i interface{}) string {
@@ -28,8 +28,8 @@ func embedSetVideo(e *embed.Embed, url string) {
 	}
 }
 
-func embedSetTimestamp(e *embed.Embed, sec int) {
-	e.MessageEmbed.Timestamp = time.Unix(int64(sec), 0).Format(time.RFC3339)
+func embedSetTimestamp(e *embed.Embed, sec int64) {
+	e.MessageEmbed.Timestamp = time.Unix(sec, 0).Format(time.RFC3339)
 }
 
 func getAuthorSignature(msg *tgbotapi.Message) string {
@@ -43,18 +43,30 @@ func getAuthorSignature(msg *tgbotapi.Message) string {
 
 func getForwardedFrom(msg *tgbotapi.Message) string {
 	forwardedFrom := ""
-	if msg.ForwardFromChat != nil {
+	origin := msg.ForwardOrigin
+	switch {
+	case origin == nil:
+		// Not a forwarded message
+	case origin.IsChannel():
 		chatName := ""
-		if msg.ForwardFromChat.UserName != "" {
-			chatName = fmt.Sprintf(" (@%s)", msg.ForwardFromChat.UserName)
+		if origin.Chat.UserName != "" {
+			chatName = fmt.Sprintf(" (@%s)", origin.Chat.UserName)
 		}
-		forwardedFrom = fmt.Sprintf("forwarded from «%s»%s", msg.ForwardFromChat.Title, chatName)
-	} else if msg.ForwardFrom != nil {
+		forwardedFrom = fmt.Sprintf("forwarded from «%s»%s", origin.Chat.Title, chatName)
+	case origin.IsChat():
+		chatName := ""
+		if origin.SenderChat.UserName != "" {
+			chatName = fmt.Sprintf(" (@%s)", origin.SenderChat.UserName)
+		}
+		forwardedFrom = fmt.Sprintf("forwarded from «%s»%s", origin.SenderChat.Title, chatName)
+	case origin.IsUser():
 		lastName := ""
-		if msg.ForwardFrom.LastName != "" {
-			lastName = " " + msg.ForwardFrom.LastName
+		if origin.SenderUser.LastName != "" {
+			lastName = " " + origin.SenderUser.LastName
 		}
-		forwardedFrom = fmt.Sprintf("forwarded from %s%s", msg.ForwardFrom.FirstName, lastName)
+		forwardedFrom = fmt.Sprintf("forwarded from %s%s", origin.SenderUser.FirstName, lastName)
+	case origin.IsHiddenUser():
+		forwardedFrom = fmt.Sprintf("forwarded from %s", origin.SenderUserName)
 	}
 
 	return forwardedFrom
@@ -74,9 +86,9 @@ func formatMessage(msg *tgbotapi.Message) string {
 
 func getPostLink(msg *tgbotapi.Message) string {
 	var result string
-	if msg.ForwardFromChat != nil {
-		if msg.ForwardFromChat.UserName != `` && msg.ForwardFromMessageID != 0 {
-			result = fmt.Sprintf(`https://t.me/%s/%d`, msg.ForwardFromChat.UserName, msg.ForwardFromMessageID)
+	if origin := msg.ForwardOrigin; origin != nil && origin.IsChannel() {
+		if origin.Chat.UserName != `` && origin.MessageID != 0 {
+			result = fmt.Sprintf(`https://t.me/%s/%d`, origin.Chat.UserName, origin.MessageID)
 		}
 	}
 	return result
@@ -132,10 +144,10 @@ func formatEmbed(msg *tgbotapi.Message) *embed.Embed {
 	result.Description = text
 	result.Description += textCaption
 
-	if msg.ForwardDate == 0 {
+	if msg.ForwardOrigin == nil {
 		embedSetTimestamp(result, msg.Date)
 	} else {
-		embedSetTimestamp(result, msg.ForwardDate)
+		embedSetTimestamp(result, msg.ForwardOrigin.Date)
 	}
 
 	return result

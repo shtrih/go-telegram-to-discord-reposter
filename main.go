@@ -3,7 +3,7 @@ package main // import "reposter"
 import (
 	"flag"
 	"fmt"
-	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/OvyFlash/telegram-bot-api"
 	"net/http"
 	"os"
 	"os/signal"
