@@ -15,8 +15,12 @@ import (
 )
 
 const (
-	// buttonPrefix marks the only message component the bot serves.
-	buttonPrefix = "repost_no_files:"
+	// sendPrefix and skipPrefix mark the only inline buttons the bot serves;
+	// the rest of the callback data is the post key.
+	sendPrefix = "repost_no_files:"
+	skipPrefix = "skip_no_files:"
+	// skipLabel is the text of the button that forwards nothing.
+	skipLabel = "Не переслать"
 	// flushDelay flushes buffered oversized files even when no further update
 	// ends the media group (e.g. the album was last in a long-poll batch).
 	flushDelay = 5 * time.Second
@@ -39,17 +43,16 @@ func newOversizedItem(post *tgbotapi.Message, fileName string, sizeBytes int64, 
 	}
 }
 
-// pendingRetry is a posted notice with the resend button.
+// pendingRetry is a posted Telegram notice with the decision buttons.
 type pendingRetry struct {
-	items    []*oversizedItem
-	errMsgID string
+	items       []*oversizedItem
+	noticeMsgID int
 }
 
 // RetryStore buffers skipped files of the current media group until the group
-// ends (one notice per group) and remembers posted notices so the button can
+// ends (one notice per group) and remembers posted notices so the buttons can
 // find them. Safe for concurrent use: updates are handled in the main loop,
-// the flush timer fires on its own, button clicks arrive on discordgo
-// goroutines.
+// the flush timer fires on its own.
 type RetryStore struct {
 	mu      sync.Mutex
 	buf     []*oversizedItem
@@ -64,12 +67,12 @@ func NewRetryStore() *RetryStore {
 
 // AddOversized buffers a skipped file; the first buffered file of a group
 // arms the flush timer.
-func (r *RetryStore) AddOversized(conf *config.Config, dcbot *discordgo.Session, item *oversizedItem, groupID string) {
+func (r *RetryStore) AddOversized(conf *config.Config, tgbot *tgbotapi.BotAPI, item *oversizedItem, groupID string) {
 	r.mu.Lock()
 	if r.timer == nil {
 		r.timer = time.AfterFunc(flushDelay, func() {
 			if items := r.takeBuffered(); len(items) > 0 {
-				postGroupError(conf, dcbot, r, items)
+				postGroupError(conf, tgbot, r, items)
 			}
 		})
 	}
@@ -140,14 +143,26 @@ func resendButtonLabel(n int) string {
 	return "Переслать без файла"
 }
 
-// postGroupError posts one notice listing every skipped file of a post or
-// media group, with the resend button attached.
-func postGroupError(conf *config.Config, dcbot *discordgo.Session, retry *RetryStore, items []*oversizedItem) {
-	embd := formatEmbed(items[0].post)
-	if items[0].blankFooter {
-		embd.SetFooter("")
-	}
+// hasText reports whether the post carries text that can be forwarded
+// without its file.
+func hasText(post *tgbotapi.Message) bool {
+	return post.Text != "" || post.Caption != ""
+}
 
+// anyHasText reports whether at least one of the skipped posts has text to
+// forward: only then is there a decision to ask about.
+func anyHasText(items []*oversizedItem) bool {
+	for _, it := range items {
+		if hasText(it.post) {
+			return true
+		}
+	}
+	return false
+}
+
+// oversizedNoticeText lists the skipped files of a post or media group; the
+// question is added only when there is something to forward without them.
+func oversizedNoticeText(limitMB int, items []*oversizedItem) string {
 	var list strings.Builder
 	for _, it := range items {
 		list.WriteString("• " + it.fileName)
@@ -156,83 +171,116 @@ func postGroupError(conf *config.Config, dcbot *discordgo.Session, retry *RetryS
 		}
 		list.WriteString("\n")
 	}
+
+	var text string
 	if len(items) == 1 {
-		embd.MessageEmbed.Description = fmt.Sprintf("⚠️ Файл не отправлен — превышен лимит %d MiB:\n%s", conf.MaxFileSizeMB, list.String())
+		text = fmt.Sprintf("⚠️ Файл не отправлен — превышен лимит %d MiB:\n%s", limitMB, list.String())
 	} else {
-		embd.MessageEmbed.Description = fmt.Sprintf("⚠️ Файлы не отправлены — превышен лимит %d MiB:\n%s", conf.MaxFileSizeMB, list.String())
+		text = fmt.Sprintf("⚠️ Файлы не отправлены — превышен лимит %d MiB:\n%s", limitMB, list.String())
 	}
+	if anyHasText(items) {
+		if len(items) == 1 {
+			text += "\nОтправить пост без файла?"
+		} else {
+			text += "\nОтправить посты без этих файлов?"
+		}
+	}
+	return text
+}
+
+// postGroupError asks in Telegram what to do with the skipped files of a post
+// or media group: nothing reaches Discord until the sender decides. Posts
+// without text of their own get the same notice without buttons — there is
+// nothing to forward, so nothing to decide.
+func postGroupError(conf *config.Config, tgbot *tgbotapi.BotAPI, retry *RetryStore, items []*oversizedItem) {
+	msg := tgbotapi.NewMessage(items[0].post.Chat.ID, oversizedNoticeText(conf.MaxFileSizeMB, items))
+	msg.ReplyParameters.MessageID = items[0].post.MessageID
+	// The post may be deleted by the time the notice goes out.
+	msg.ReplyParameters.AllowSendingWithoutReply = true
+	msg.DisableNotification = true
+	msg.LinkPreviewOptions.IsDisabled = true
 
 	key := postKey(items[0].post)
-	m, err := dcbot.ChannelMessageSendComplex(conf.Discord.ChannelID, &discordgo.MessageSend{
-		Embed: embd.MessageEmbed,
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.Button{
-						Label:    resendButtonLabel(len(items)),
-						Style:    discordgo.PrimaryButton,
-						CustomID: buttonPrefix + key,
-					},
-				},
-			},
-		},
-	})
+	decide := anyHasText(items)
+	if decide {
+		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(resendButtonLabel(len(items)), sendPrefix+key),
+				tgbotapi.NewInlineKeyboardButtonData(skipLabel, skipPrefix+key),
+			),
+		)
+	}
+
+	m, err := tgbot.Send(msg)
 	if err != nil {
 		log.Printf("Cannot send oversized-files notice! See error: %s", err.Error())
 		return
 	}
-	retry.addPending(key, &pendingRetry{items: items, errMsgID: m.ID})
+	if decide {
+		retry.addPending(key, &pendingRetry{items: items, noticeMsgID: m.MessageID})
+	}
 }
 
-// HandleInteraction serves clicks on the resend button. Registered in main.go
-// via dcbot.AddHandler; discordgo calls it on its own goroutines.
-func HandleInteraction(conf *config.Config, db *database.Database, dcbot *discordgo.Session, retry *RetryStore, i *discordgo.InteractionCreate) {
-	if i.Type != discordgo.InteractionMessageComponent {
-		return
+// parseCallback splits the callback data of the notice buttons into the post
+// key and the decision it carries; ok is false for any other callback.
+func parseCallback(data string) (key string, skip bool, ok bool) {
+	switch {
+	case strings.HasPrefix(data, sendPrefix):
+		key = strings.TrimPrefix(data, sendPrefix)
+	case strings.HasPrefix(data, skipPrefix):
+		key, skip = strings.TrimPrefix(data, skipPrefix), true
+	default:
+		return "", false, false
 	}
-	data := i.MessageComponentData()
-	if !strings.HasPrefix(data.CustomID, buttonPrefix) {
-		return
-	}
+	return key, skip, true
+}
 
-	key := strings.TrimPrefix(data.CustomID, buttonPrefix)
+// HandleCallback serves presses on the notice buttons; nothing is forwarded
+// until "resend" is pressed. Called from the main update loop.
+func HandleCallback(conf *config.Config, db *database.Database, tgbot *tgbotapi.BotAPI, dcbot *discordgo.Session, retry *RetryStore, q *tgbotapi.CallbackQuery) {
+	key, skip, ok := parseCallback(q.Data)
+	if !ok {
+		return
+	}
 	p, ok := retry.popPending(key)
 	if !ok {
-		// The notice outlived the process (bot restart): state is gone.
-		if err := dcbot.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ Кнопка устарела (бот перезапускался), пересылка невозможна.",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		}); err != nil {
-			log.Printf("Cannot answer stale button click! See error: %s", err.Error())
-		}
+		// The notice outlived the process (bot restart) or was already served.
+		answerCallback(tgbot, q.ID, "Кнопка устарела: пост уже обработан или бот перезапускался.", true)
 		return
 	}
 
-	// Acknowledge within 3s, then repost (embeds only, nothing to download).
-	if err := dcbot.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		Data: &discordgo.InteractionResponseData{},
-	}); err != nil {
-		log.Printf("Cannot acknowledge button click! See error: %s", err.Error())
+	if skip {
+		answerCallback(tgbot, q.ID, "Не переслано", false)
+	} else {
+		var failed []*oversizedItem
+		for _, it := range p.items {
+			if !resendWithoutFile(conf, db, dcbot, it) {
+				failed = append(failed, it)
+			}
+		}
+		if len(failed) > 0 {
+			// Transient send failure: keep the notice with its buttons so the
+			// posts that failed can be resent by pressing again.
+			retry.addPending(key, &pendingRetry{items: failed, noticeMsgID: p.noticeMsgID})
+			answerCallback(tgbot, q.ID, "Не удалось переслать, попробуйте ещё раз.", true)
+			return
+		}
+		answerCallback(tgbot, q.ID, "Переслано", false)
 	}
 
-	var failed []*oversizedItem
-	for _, it := range p.items {
-		if !resendWithoutFile(conf, db, dcbot, it) {
-			failed = append(failed, it)
-		}
-	}
-	if len(failed) > 0 {
-		// Transient send failure: keep the notice with its button so the
-		// posts that failed can be resent by clicking again.
-		retry.addPending(key, &pendingRetry{items: failed, errMsgID: p.errMsgID})
-		return
-	}
-	if err := dcbot.ChannelMessageDelete(conf.Discord.ChannelID, p.errMsgID); err != nil {
+	// deleteMessage returns true, which Send cannot decode into a Message.
+	if _, err := tgbot.Request(tgbotapi.NewDeleteMessage(p.items[0].post.Chat.ID, p.noticeMsgID)); err != nil {
 		log.Printf("Cannot delete oversized-files notice! See error: %s", err.Error())
+	}
+}
+
+// answerCallback acknowledges a button press with a toast, or an alert.
+func answerCallback(tgbot *tgbotapi.BotAPI, id, text string, alert bool) {
+	cb := tgbotapi.NewCallback(id, text)
+	cb.ShowAlert = alert
+	// answerCallbackQuery returns true as well.
+	if _, err := tgbot.Request(cb); err != nil {
+		log.Printf("Cannot answer button press! See error: %s", err.Error())
 	}
 }
 

@@ -5,7 +5,8 @@ database: "file:store.db"
 # Duration string, "24h" by default; "0" disables cleanup entirely.
 retention: "24h"
 # Per-file upload limit in MiB. Files larger than this are not forwarded;
-# the bot posts a notice with a "resend without these files" button instead.
+# instead the bot asks in the Telegram channel, as a reply to the post,
+# whether to forward the rest of the post (its text) without them.
 # 20 by default (Discord's default per-file limit).
 max_file_size_mb: 20
 telegram:

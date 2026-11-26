@@ -71,6 +71,77 @@ func TestResendButtonLabel(t *testing.T) {
 	}
 }
 
+func TestOversizedNoticeText(t *testing.T) {
+	item := func(fileName string, sizeBytes int64, caption string) *oversizedItem {
+		return &oversizedItem{
+			post:      &tgbotapi.Message{Caption: caption},
+			fileName:  fileName,
+			sizeBytes: sizeBytes,
+		}
+	}
+	tests := []struct {
+		name  string
+		items []*oversizedItem
+		want  string
+	}{
+		{
+			"one file with text asks",
+			[]*oversizedItem{item("a.zip", 25<<20, "caption")},
+			"⚠️ Файл не отправлен — превышен лимит 20 MiB:\n• a.zip — 25.0 MiB\n\nОтправить пост без файла?",
+		},
+		{
+			"several files with text ask in plural",
+			[]*oversizedItem{item("a.zip", 25<<20, ""), item("b.mkv", 80<<20, "caption")},
+			"⚠️ Файлы не отправлены — превышен лимит 20 MiB:\n• a.zip — 25.0 MiB\n• b.mkv — 80.0 MiB\n\nОтправить посты без этих файлов?",
+		},
+		{
+			"one file without text leaves nothing to ask",
+			[]*oversizedItem{item("a.zip", 25<<20, "")},
+			"⚠️ Файл не отправлен — превышен лимит 20 MiB:\n• a.zip — 25.0 MiB\n",
+		},
+		{
+			"several files without text leave nothing to ask",
+			[]*oversizedItem{item("a.zip", 25<<20, ""), item("b.mkv", 80<<20, "")},
+			"⚠️ Файлы не отправлены — превышен лимит 20 MiB:\n• a.zip — 25.0 MiB\n• b.mkv — 80.0 MiB\n",
+		},
+		{
+			"unknown size has no size suffix",
+			[]*oversizedItem{item("a.zip", 0, "caption")},
+			"⚠️ Файл не отправлен — превышен лимит 20 MiB:\n• a.zip\n\nОтправить пост без файла?",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := oversizedNoticeText(20, tc.items); got != tc.want {
+				t.Fatalf("oversizedNoticeText() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseCallback(t *testing.T) {
+	tests := []struct {
+		name  string
+		data  string
+		key   string
+		skip  bool
+		valid bool
+	}{
+		{"resend", sendPrefix + "-1001,5", "-1001,5", false, true},
+		{"skip", skipPrefix + "-1001,5", "-1001,5", true, true},
+		{"other button", "other:-1001,5", "", false, false},
+		{"empty", "", "", false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			key, skip, ok := parseCallback(tc.data)
+			if key != tc.key || skip != tc.skip || ok != tc.valid {
+				t.Fatalf("parseCallback(%q) = (%q, %v, %v), want (%q, %v, %v)", tc.data, key, skip, ok, tc.key, tc.skip, tc.valid)
+			}
+		})
+	}
+}
+
 func TestRetryStore(t *testing.T) {
 	r := NewRetryStore()
 
@@ -102,9 +173,9 @@ func TestRetryStore(t *testing.T) {
 	}
 
 	// Pending notices pop exactly once.
-	r.addPending("k", &pendingRetry{errMsgID: "m1"})
-	if p, ok := r.popPending("k"); !ok || p.errMsgID != "m1" {
-		t.Fatalf("popPending ok=%v, errMsgID=%q", ok, p.errMsgID)
+	r.addPending("k", &pendingRetry{noticeMsgID: 1})
+	if p, ok := r.popPending("k"); !ok || p.noticeMsgID != 1 {
+		t.Fatalf("popPending ok=%v, noticeMsgID=%d", ok, p.noticeMsgID)
 	}
 	if _, ok := r.popPending("k"); ok {
 		t.Fatal("popPending returned the same notice twice")

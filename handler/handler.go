@@ -210,7 +210,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		groupID = u.ChannelPost.MediaGroupID
 	}
 	if items := retry.takeIfChanged(groupID); len(items) > 0 {
-		postGroupError(conf, dcbot, retry, items)
+		postGroupError(conf, tgbot, retry, items)
 	}
 
 	if u.ChannelPost != nil {
@@ -247,14 +247,14 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			if len(u.ChannelPost.Photo) > 0 {
 				size := mediaFileSize(u.ChannelPost)
 				if size > limit {
-					retry.AddOversized(conf, dcbot, newOversizedItem(u.ChannelPost, "photo.jpg", size, blankFooter), u.ChannelPost.MediaGroupID)
+					retry.AddOversized(conf, tgbot, newOversizedItem(u.ChannelPost, "photo.jpg", size, blankFooter), u.ChannelPost.MediaGroupID)
 					return
 				}
 				p := u.ChannelPost.Photo
 				url, err := tgbot.GetFileDirectURL(p[len(u.ChannelPost.Photo)-1].FileID)
 				if err != nil {
 					if isTooLargeErr(err) {
-						retry.AddOversized(conf, dcbot, newOversizedItem(u.ChannelPost, "photo.jpg", size, blankFooter), u.ChannelPost.MediaGroupID)
+						retry.AddOversized(conf, tgbot, newOversizedItem(u.ChannelPost, "photo.jpg", size, blankFooter), u.ChannelPost.MediaGroupID)
 						return
 					}
 					log.Printf("Cannot get direct file URL! See error: %s", err.Error())
@@ -292,7 +292,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				)
 				if err != nil {
 					if isTooLargeErr(err) {
-						retry.AddOversized(conf, dcbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
+						retry.AddOversized(conf, tgbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
 						return
 					}
 					log.Printf("Cannot send file! See error: %s", err.Error())
@@ -388,12 +388,12 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 			// Telegram refuses to serve bots files above the limit, so skip
 			// such files upfront and offer resending the post without them.
 			if size > limit {
-				retry.AddOversized(conf, dcbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
+				retry.AddOversized(conf, tgbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
 			} else {
 				url, err := tgbot.GetFileDirectURL(*fileID)
 				if err != nil {
 					if isTooLargeErr(err) {
-						retry.AddOversized(conf, dcbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
+						retry.AddOversized(conf, tgbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
 						return
 					}
 					errr := fmt.Errorf("Cannot get direct file URL! Error: %s", err.Error())
@@ -444,7 +444,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				)
 				if err != nil {
 					if isTooLargeErr(err) {
-						retry.AddOversized(conf, dcbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
+						retry.AddOversized(conf, tgbot, newOversizedItem(u.ChannelPost, fileName, size, blankFooter), u.ChannelPost.MediaGroupID)
 						return
 					}
 					errr := fmt.Errorf("Cannot send file! See error: %s", err.Error())
@@ -476,7 +476,7 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 		// A standalone post (no media group) is its own batch: flush now.
 		if u.ChannelPost.MediaGroupID == "" {
 			if items := retry.takeBuffered(); len(items) > 0 {
-				postGroupError(conf, dcbot, retry, items)
+				postGroupError(conf, tgbot, retry, items)
 			}
 		}
 	} else if u.EditedChannelPost != nil {
@@ -509,6 +509,8 @@ func HandleUpdate(conf *config.Config, db *database.Database, client *http.Clien
 				log.Printf("Cannot edit repost! See error: %s", err.Error())
 			}
 		}
+	} else if u.CallbackQuery != nil {
+		HandleCallback(conf, db, tgbot, dcbot, retry, u.CallbackQuery)
 	} else if u.Message != nil {
 		msg := tgbotapi.NewMessage(u.Message.Chat.ID, "Я просто бот. Какая тебе разница, чем я занят?")
 		tgbot.Send(msg)

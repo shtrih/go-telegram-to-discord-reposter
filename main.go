@@ -14,8 +14,6 @@ import (
 	"reposter/proxy"
 	"reposter/tgapi"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 var (
@@ -83,12 +81,9 @@ func main() {
 		panic(err)
 	}
 
-	// Skipped oversized files and their resend buttons. Interaction events
-	// (button clicks) arrive on discordgo goroutines.
+	// Skipped oversized files and their decision buttons; presses arrive as
+	// ordinary Telegram updates in the main loop.
 	retry := handler.NewRetryStore()
-	dcbot.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		handler.HandleInteraction(conf, db, s, retry, i)
-	})
 
 	// Clean records older than the edit window once and every hour after
 	cleanup := func() {
